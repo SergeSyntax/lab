@@ -1,0 +1,260 @@
+---
+- name: Install APT package on localhost
+  hosts: localhost
+  become: true
+
+  vars_prompt:
+    - name: git_email
+      prompt: "Enter your Git email"
+      private: false
+
+  vars:
+    username: "{{ ansible_env.SUDO_USER | default(ansible_user_id) }}"
+    userhome: "{{ '/home/' + username if username != 'root' else '/root' }}"
+    fonts_dir: "{{ userhome }}/.local/share/fonts"
+
+  tasks:
+    - name: Download and set permissions for Docker GPG key
+      get_url:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        dest: /etc/apt/keyrings/docker.asc
+        mode: "0644"
+
+    - name: Get system architecture from dpkg
+      command: dpkg --print-architecture
+      register: dpkg_architecture
+      changed_when: false
+
+    - name: Add Docker repository
+      apt_repository:
+        repo: "deb [arch={{ dpkg_architecture.stdout }} signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        filename: docker
+
+    - name: Update apt cache and upgrade system
+      apt:
+        update_cache: true
+        upgrade: dist
+        cache_valid_time: 3600
+
+    - name: Install essential packages
+      apt:
+        state: present
+        name:
+          - vim
+          - git
+          - curl
+          - zsh
+          - fontconfig
+          - kubectx
+          - python3-pip
+          - powerline
+          - fonts-powerline
+          - fonts-font-awesome
+          - fonts-dejavu
+          - fonts-liberation
+          - fonts-noto-color-emoji
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+
+    - name: Add user to docker group
+      user:
+        name: "{{ username }}"
+        groups: docker
+        append: yes
+
+    - name: Fix .zshrc file ownership and permissions
+      file:
+        path: "{{ userhome }}/.zshrc"
+        owner: "{{ username }}"
+        group: "{{ username }}"
+        mode: "0644"
+        state: file
+
+    - name: Set git user.name
+      community.general.git_config:
+        name: user.name
+        value: "{{ git_user_name | default('SergeSyntax') }}"
+        scope: global
+
+    - name: Set git user.email
+      community.general.git_config:
+        name: user.email
+        value: "{{ git_email }}"
+        scope: global
+
+    - name: Set zsh as default
+      user:
+        name: "{{ username }}"
+        shell: /usr/bin/zsh
+
+    - name: Install snap packages
+      snap:
+        name:
+          - postman
+          - discord
+          - dbeaver-ce
+          - redisinsight
+
+    - name: Check if nvm is already installed
+      stat:
+        path: "{{ userhome }}/.nvm"
+      register: nvm_check
+      become: false
+
+    - name: Install nvm if not present
+      when: not nvm_check.stat.exists
+      become: false
+      block:
+        - name: Download nvm install script
+          get_url:
+            url: https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh
+            dest: /tmp/nvm_install.sh
+            mode: "0755"
+
+    - name: Run nvm install script
+      shell: /tmp/nvm_install.sh
+      args:
+        executable: /bin/bash
+        creates: "{{ userhome }}/.nvm/nvm.sh"
+      environment:
+        HOME: "{{ userhome }}"
+        USER: "{{ username }}"
+
+    - name: Check if ohmyzsh is installed
+      stat:
+        path: "{{ userhome }}/.oh-my-zsh"
+      register: ohmyzsh_check
+
+    - name: Install ohmyzsh if not present
+      when: not ohmyzsh_check.stat.exists
+      block:
+        - name: Download ohmyzsh package
+          get_url:
+            url: https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh
+            dest: /tmp/ohmyzsh_install.sh
+            mode: "0755"
+
+        - name: Run Oh My Zsh install script
+          shell: "bash /tmp/ohmyzsh_install.sh --unattended"
+          environment:
+            RUNZSH: "no"
+            HOME: "{{ userhome }}"
+            ZSH: "{{ userhome }}/.oh-my-zsh"
+            USER: "{{ username }}"
+
+    - name: Clone zsh-syntax-highlighting plugin
+      git:
+        repo: https://github.com/zsh-users/zsh-syntax-highlighting.git
+        dest: "{{ userhome }}/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting"
+        clone: yes
+        update: yes
+        depth: 1
+      become: false
+
+    - name: Clone zsh-autosuggestions plugin
+      git:
+        repo: https://github.com/zsh-users/zsh-autosuggestions.git
+        dest: "{{ userhome }}/.oh-my-zsh/custom/plugins/zsh-autosuggestions"
+        clone: yes
+        update: yes
+        depth: 1
+      become: false
+
+    - name: Clone powerlevel10k theme
+      git:
+        repo: https://github.com/romkatv/powerlevel10k.git
+        dest: "{{ userhome }}/.oh-my-zsh/custom/themes/powerlevel10k"
+        clone: yes
+        update: yes
+        depth: 1
+      become: false
+
+    - name: Update Oh My Zsh plugins in .zshrc
+      lineinfile:
+        path: "{{ userhome }}/.zshrc"
+        regexp: '^plugins=\(.*\)$'
+        line: "plugins=(git zsh-autosuggestions zsh-syntax-highlighting nvm colored-man-pages pip python ssh terraform aws virtualenv docker kubectl kubectx)"
+        backup: yes
+
+    - name: Set powerlevel10k theme in .zshrc
+      lineinfile:
+        path: "{{ userhome }}/.zshrc"
+        regexp: "^ZSH_THEME="
+        line: 'ZSH_THEME="powerlevel10k/powerlevel10k"'
+        backup: yes
+      become: false
+
+    - name: Check if VSCode is installed
+      command: which code
+      register: vscode_check
+      ignore_errors: true
+      failed_when: false
+      changed_when: false
+
+    - name: Install VSCode if not present
+      when: vscode_check.rc != 0
+      block:
+        - name: Download VSCode package
+          get_url:
+            url: https://go.microsoft.com/fwlink/?LinkID=760868
+            dest: /tmp/vscode.deb
+            mode: "0644"
+        - name: Install VSCode
+          apt:
+            deb: /tmp/vscode.deb
+
+    - name: Check if Google Chrome is installed
+      command: which google-chrome
+      register: chrome_check
+      ignore_errors: true
+      failed_when: false
+      changed_when: false
+
+    - name: Install Google Chrome if not present
+      when: chrome_check.rc != 0
+      block:
+        - name: Download Google Chrome package
+          get_url:
+            url: https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+            dest: /tmp/chrome.deb
+            mode: "0644"
+        - name: Install Google Chrome
+          apt:
+            deb: /tmp/chrome.deb
+
+    - name: Download MesloLGS NF fonts to Downloads
+      get_url:
+        url: "{{ item.url }}"
+        dest: "{{ userhome }}/Downloads/{{ item.name }}"
+        owner: "{{ username }}"
+        group: "{{ username }}"
+        mode: "0644"
+      loop:
+        - {
+            url: "https://github.com/romkatv/powerlevel10k-media/raw/master/MesloLGS%20NF%20Regular.ttf",
+            name: "MesloLGS NF Regular.ttf",
+          }
+        - {
+            url: "https://github.com/romkatv/powerlevel10k-media/raw/master/MesloLGS%20NF%20Bold.ttf",
+            name: "MesloLGS NF Bold.ttf",
+          }
+        - {
+            url: "https://github.com/romkatv/powerlevel10k-media/raw/master/MesloLGS%20NF%20Italic.ttf",
+            name: "MesloLGS NF Italic.ttf",
+          }
+        - {
+            url: "https://github.com/romkatv/powerlevel10k-media/raw/master/MesloLGS%20NF%20Bold%20Italic.ttf",
+            name: "MesloLGS NF Bold Italic.ttf",
+          }
+      become: false
+
+    - name: Display setup summary
+      debug:
+        msg: |
+          Setup completed successfully!
+          User: {{ username }}
+          Home: {{ userhome }}
+          Fonts installed in: {{ fonts_dir }}

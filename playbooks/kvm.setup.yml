@@ -1,0 +1,86 @@
+---
+- name: Install and Configure KVM on Localhost
+  hosts: localhost
+  become: true
+  vars:
+    username: "{{ ansible_env.SUDO_USER | default(ansible_user_id) }}"
+    userhome: "{{ '/home/' + username if username != 'root' else '/root' }}"
+    ethernet_interface: "{{ bridge_interface | default('enp5s0') }}"
+  tasks:
+    - name: Update APT cache and upgrade system packages
+      apt:
+        update_cache: true
+        upgrade: dist
+        cache_valid_time: 3600
+
+    - name: Install KVM and virtualization dependencies
+      apt:
+        state: present
+        name:
+          - qemu-kvm
+          - libvirt-daemon-system
+          - libvirt-clients
+          - bridge-utils
+          - python3-pip
+          - python3-libvirt
+          - python3-lxml
+          - cockpit
+          - cockpit-machines
+
+    - name: Add user to libvirt group for virtualization access
+      user:
+        name: "{{ username }}"
+        groups: libvirt
+        append: yes
+
+    - name: Create bridge connection
+      nmcli:
+        conn_name: bridge-br0
+        ifname: br0
+        type: bridge
+        method4: auto
+        state: present
+
+    - name: Add ethernet interface to bridge as slave
+      nmcli:
+        conn_name: "bridge-slave-{{ ethernet_interface }}"
+        ifname: "{{ ethernet_interface }}"
+        type: ethernet
+        slave_type: bridge
+        master: br0
+        state: present
+
+    - name: Create libvirt definition for the bridge-br0
+      copy:
+        dest: /tmp/br0.xml
+        content: |
+          <network>
+            <name>br0</name>
+            <forward mode='bridge'/>
+            <bridge name='br0'/>
+          </network>
+        owner: "{{ username }}"
+        group: "{{ username }}"
+        mode: "0644"
+
+    - name: Define libvirt bridge network
+      community.libvirt.virt_net:
+        name: br0
+        command: define
+        xml: "{{ lookup('file', '/tmp/br0.xml') }}"
+
+    - name: Start libvirt bridge network
+      community.libvirt.virt_net:
+        name: br0
+        command: start
+
+    - name: Set libvirt bridge network to autostart
+      community.libvirt.virt_net:
+        name: br0
+        autostart: yes
+
+    - name: Enable and start Cockpit web console
+      systemd:
+        name: cockpit.socket
+        enabled: yes
+        state: started
