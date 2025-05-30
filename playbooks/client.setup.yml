@@ -10,7 +10,7 @@
 
   vars:
     username: "{{ ansible_env.SUDO_USER | default(ansible_user_id) }}"
-    userhome: "{{ '/home/' + username if username != 'root' else '/root' }}"
+    userhome: "{{ '/root' if username == 'root' else '/home/' + username }}"
     fonts_dir: "{{ userhome }}/.local/share/fonts"
 
   tasks:
@@ -18,6 +18,18 @@
       get_url:
         url: https://download.docker.com/linux/ubuntu/gpg
         dest: /etc/apt/keyrings/docker.asc
+        mode: "0644"
+
+    - name: Download and set premissions for kubectl GPG key
+      get_url:
+        url: https://pkgs.k8s.io/core:/stable:/v1.33/deb/Release.key
+        dest: /etc/apt/keyrings/kubernetes-apt-keyring.asc
+        mode: "0644"
+
+    - name: Download kubectl GPG key
+      get_url:
+        url: https://pkgs.k8s.io/core:/stable:/v1.33/deb/Release.key
+        dest: /tmp/kubernetes-release.key
         mode: "0644"
 
     - name: Get system architecture from dpkg
@@ -29,6 +41,11 @@
       apt_repository:
         repo: "deb [arch={{ dpkg_architecture.stdout }} signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
         filename: docker
+
+    - name: Add kubectl repository
+      apt_repository:
+        repo: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.asc] https://pkgs.k8s.io/core:/stable:/v1.33/deb/ /"
+        filename: kubernetes
 
     - name: Update apt cache and upgrade system
       apt:
@@ -58,6 +75,10 @@
           - containerd.io
           - docker-buildx-plugin
           - docker-compose-plugin
+          - apt-transport-https
+          - ca-certificates
+          - gnupg
+          - kubectl
 
     - name: Add user to docker group
       user:
@@ -84,6 +105,42 @@
         name: user.email
         value: "{{ git_email }}"
         scope: global
+
+    - name: Generate an OpenSSH keypair
+      openssh_keypair:
+        path: "{{ userhome }}/.ssh/id_ed25519"
+        type: ed25519
+        comment: "{{ git_email }}"
+        owner: "{{ username }}"
+        group: "{{ username }}"
+        mode: "0600"
+
+    - name: Add SSH private key to ssh-agent (with agent startup if needed)
+      shell: |
+        if ! pgrep -f ssh-agent > /dev/null; then
+          eval "$(ssh-agent -s)" > /dev/null
+        fi
+        ssh-add {{ userhome }}/.ssh/id_ed25519 2>/dev/null || echo "Key already added or ssh-agent not accessible"
+      become_user: "{{ username }}"
+      environment:
+        HOME: "{{ userhome }}"
+      changed_when: false
+
+    - name: Display SSH public key for GitHub
+      pause:
+        prompt: |
+
+          ========================================
+          SSH Public Key (copy this to GitHub):
+          ========================================
+          {{ lookup('file', userhome + '/.ssh/id_ed25519.pub') }}
+
+          ========================================
+          Add this key to GitHub at:
+          https://github.com/settings/ssh/new
+          ========================================
+
+          Press Enter to continue...
 
     - name: Set zsh as default
       user:

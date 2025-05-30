@@ -4,7 +4,7 @@
   become: true
   vars:
     username: "{{ ansible_env.SUDO_USER | default(ansible_user_id) }}"
-    userhome: "{{ '/home/' + username if username != 'root' else '/root' }}"
+    userhome: "{{ '/root' if username == 'root' else '/home/' + username }}"
     ethernet_interface: "{{ bridge_interface | default('enp5s0') }}"
   tasks:
     - name: Update APT cache and upgrade system packages

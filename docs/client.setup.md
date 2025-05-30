@@ -41,12 +41,29 @@ Installs Ansible and required dependencies. Run this first.
 4. Run the Powerlevel10k setup wizard
    🔗 [Font Info & Troubleshooting](https://github.com/romkatv/powerlevel10k#oh-my-zsh)
 
+### 📦 Node.js LTS Installation
+
+After setup, install the latest Node.js LTS version:
+
+```sh
+nvm install --lts
+```
+
 ### 🐳 Docker Group Access
 
 **IMPORTANT:** Run the following command to apply Docker group permissions without reboot:
 
 ```sh
 newgrp docker
+```
+
+### ⌨️ Bash Users: kubectl Completion
+
+If you use bash instead of zsh, add kubectl completion:
+
+```bash
+echo 'source <(kubectl completion bash)' >> ~/.bashrc
+source ~/.bashrc
 ```
 
 ---
@@ -85,3 +102,7 @@ VS Code download links may change—verify at:
 
 Manage multiple Node.js versions
 🔗 [nvm GitHub](https://github.com/nvm-sh/nvm)
+
+---
+
+⬅️ [Back to Lab Setup](../README.md)
