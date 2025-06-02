@@ -1,0 +1,12 @@
+---
+kubectl_packages:
+  - curl
+  - ca-certificates
+  - apt-transport-https
+  - gnupg
+  - kubectl
+  - kubectx
+kubectl_version: 'v1.33'
+kubectl_gpg_key_url: 'https://pkgs.k8s.io/core:/stable:/{{ kubectl_version }}/deb/Release.key'
+kubectl_keyring_path: '/etc/apt/keyrings/kubernetes-apt-keyring.asc'
+kubectl_repo_url: 'https://pkgs.k8s.io/core:/stable:/{{ kubectl_version }}/deb/'

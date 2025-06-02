@@ -1,0 +1,40 @@
+---
+ohmyzsh_install_path: '/tmp/ohmyzsh_install.sh'
+ohmyzsh_install_url: 'https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh'
+
+zsh_theme: 'powerlevel10k/powerlevel10k'
+zsh_shell_path: '{{ userhome }}/.zshrc'
+ohmyzsh_dir: '{{ userhome }}/.oh-my-zsh'
+zsh_plugins_list: 'git zsh-autosuggestions zsh-syntax-highlighting nvm colored-man-pages pip python ssh terraform aws virtualenv docker kubectl kubectx'
+
+meslo_base_url: https://github.com/romkatv/powerlevel10k-media/raw/master
+meslo_fonts:
+  - name: 'MesloLGS NF Regular'
+    url: 'https://github.com/romkatv/powerlevel10k-media/raw/master/MesloLGS%20NF%20Regular.ttf'
+  - name: 'MesloLGS NF Bold'
+    url: 'https://github.com/romkatv/powerlevel10k-media/raw/master/MesloLGS%20NF%20Bold.ttf'
+  - name: 'MesloLGS NF Italic'
+    url: 'https://github.com/romkatv/powerlevel10k-media/raw/master/MesloLGS%20NF%20Italic.ttf'
+  - name: 'MesloLGS NF Bold Italic'
+    url: 'https://github.com/romkatv/powerlevel10k-media/raw/master/MesloLGS%20NF%20Bold%20Italic.ttf'
+
+zsh_packages:
+  - zsh
+  - fontconfig
+  - powerline
+  - fonts-powerline
+  - fonts-font-awesome
+  - fonts-dejavu
+  - fonts-liberation
+  - fonts-noto-color-emoji
+
+zsh_custom_extensions:
+  - name: zsh-syntax-highlighting
+    repo: https://github.com/zsh-users/zsh-syntax-highlighting.git
+    dest: '{{ ohmyzsh_dir }}/custom/plugins/zsh-syntax-highlighting'
+  - name: zsh-autosuggestions
+    repo: https://github.com/zsh-users/zsh-autosuggestions.git
+    dest: '{{ ohmyzsh_dir }}/custom/plugins/zsh-autosuggestions'
+  - name: powerlevel10k
+    repo: https://github.com/romkatv/powerlevel10k.git
+    dest: '{{ ohmyzsh_dir }}/custom/themes/powerlevel10k'

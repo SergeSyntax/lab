@@ -1,0 +1,11 @@
+docker_download_url: https://download.docker.com/linux/ubuntu
+docker_group_name: 'docker'
+docker_gpg_key_path: /etc/apt/keyrings/docker.asc
+docker_apt_packages:
+  - curl
+  - ca-certificates
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-buildx-plugin
+  - docker-compose-plugin

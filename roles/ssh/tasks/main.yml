@@ -1,0 +1,25 @@
+- name: Generate an OpenSSH keypair
+  tags: ssh
+  openssh_keypair:
+    path: '{{ ssh_key_path }}'
+    type: '{{ ssh_key_type }}'
+    comment: '{{ ssh_key_comment }}'
+    owner: '{{ username }}'
+    group: '{{ username }}'
+    mode: '0600'
+
+- name: Add SSH private key to ssh-agent (with agent startup if needed)
+  tags: ssh
+  shell: |
+    if ! pgrep -f ssh-agent > /dev/null; then
+      eval "$(ssh-agent -s)" > /dev/null
+    fi
+    ssh-add {{ ssh_key_path }} 2>/dev/null || echo "Key already added or ssh-agent not accessible"
+  become_user: '{{ username }}'
+  environment:
+    HOME: '{{ userhome }}'
+  changed_when: false
+
+- name: Trigger SSH key display handler
+  tags: ssh
+  meta: flush_handlers

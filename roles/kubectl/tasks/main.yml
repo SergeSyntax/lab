@@ -1,0 +1,22 @@
+---
+- name: Download and set permissions for kubectl GPG key
+  get_url:
+    url: '{{ kubectl_gpg_key_url }}'
+    dest: '{{ kubectl_keyring_path }}'
+    mode: '0644'
+
+- name: Add kubectl repository
+  apt_repository:
+    repo: 'deb [signed-by={{ kubectl_keyring_path }}] {{ kubectl_repo_url }} /'
+    filename: kubernetes
+
+- name: Update apt cache and upgrade system
+  apt:
+    update_cache: true
+    upgrade: dist
+    cache_valid_time: 3600
+
+- name: Install essential packages
+  apt:
+    state: present
+    name: '{{ kubectl_packages }}'

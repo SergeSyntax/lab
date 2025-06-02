@@ -1,0 +1,16 @@
+---
+- name: Display SSH public key for GitHub
+  pause:
+    prompt: |
+
+      ========================================
+      SSH Public Key (copy this to GitHub):
+      ========================================
+      {{ lookup('file', ssh_pub_key_path) }}
+
+      ========================================
+      Add this key to GitHub at:
+      {{ gh_ssh_url }}
+      ========================================
+
+      Press Enter to continue...

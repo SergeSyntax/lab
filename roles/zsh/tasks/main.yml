@@ -1,0 +1,86 @@
+---
+- name: Install essential packages
+  tags: zsh
+  apt:
+    state: present
+    name: '{{ zsh_packages }}'
+
+- name: Fix .zshrc file ownership and permissions
+  tags: zsh
+  file:
+    path: '{{ zsh_shell_path }}'
+    owner: '{{ username }}'
+    group: '{{ username }}'
+    mode: '0644'
+    state: file
+
+- name: Set zsh as default
+  tags: zsh
+  user:
+    name: '{{ username }}'
+    shell: /usr/bin/zsh
+
+- name: Check if ohmyzsh is installed
+  tags: zsh
+  stat:
+    path: '{{ ohmyzsh_dir }}'
+  register: ohmyzsh_check
+
+- name: Install ohmyzsh if not present
+  tags: zsh
+  when: not ohmyzsh_check.stat.exists
+  block:
+    - name: Download ohmyzsh package
+      get_url:
+        url: '{{ ohmyzsh_install_url }}'
+        dest: '{{ ohmyzsh_install_path }}'
+        mode: '0755'
+
+    - name: Run Oh My Zsh install script
+      shell: 'bash /tmp/ohmyzsh_install.sh --unattended'
+      environment:
+        RUNZSH: 'no'
+        HOME: '{{ userhome }}'
+        ZSH: '{{ ohmyzsh_dir }}'
+        USER: '{{ username }}'
+
+- name: Clone {{ item.name }}
+  tags: zsh
+  git:
+    repo: '{{ item.repo }}'
+    dest: '{{ item.dest }}'
+    clone: true
+    update: true
+    depth: 1
+  become: false
+  loop: '{{ zsh_custom_extensions }}'
+
+- name: Update Oh My Zsh plugins in .zshrc
+  tags: zsh
+  lineinfile:
+    path: '{{ zsh_shell_path }}'
+    regexp: '^plugins=\(.*\)$'
+    line: 'plugins=({{ zsh_plugins_list }})'
+    backup: true
+
+- name: Set powerlevel10k theme in .zshrc
+  tags: zsh
+  lineinfile:
+    path: '{{ zsh_shell_path }}'
+    regexp: '^ZSH_THEME='
+    line: 'ZSH_THEME="{{zsh_theme}}"'
+    backup: true
+  become: false
+
+- name: Download MesloLGS NF fonts to Downloads
+  tags: zsh
+  get_url:
+    url: '{{ item.url }}'
+    dest: "{{ userhome }}/Downloads/{{ item.url | basename | replace('%20', ' ') }}"
+    owner: '{{ username }}'
+    group: '{{ username }}'
+    mode: '0644'
+  loop: '{{ meslo_fonts }}'
+  loop_control:
+    label: '{{ item.name }}'
+  become: false

@@ -1,0 +1,7 @@
+gh_ssh_url: https://github.com/settings/ssh/new
+ssh_file: id_ed25519
+ssh_key_type: ed25519
+ssh_key_file: id_ed25519
+ssh_key_path: '{{ userhome }}/.ssh/{{ ssh_key_file }}'
+ssh_pub_key_path: '{{ ssh_key_path }}.pub'
+ssh_key_comment: '{{ git_email }}'
