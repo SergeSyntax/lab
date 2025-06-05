@@ -10,8 +10,22 @@
     bridge_connection_name: bridge-br0
     bridge_xml_file: /tmp/br0.xml
     iso_storage_path: '/var/lib/libvirt/images'
-    ubuntu_iso_url: 'https://releases.ubuntu.com/24.04.2/ubuntu-24.04.2-live-server-amd64.iso'
-    ubuntu_iso_filename: 'ubuntu-24.04.2-live-server-amd64.iso'
+    ubuntu_cloud_image_url: 'https://cloud-images.ubuntu.com/oracular/current/oracular-server-cloudimg-amd64.img'
+    ubuntu_cloud_image_filename: 'ubuntu-oracular-server-cloudimg-amd64.img'
+
+    # Cloud-init defaults for automated VM provisioning
+    cloudinit_template_dir: '/var/lib/libvirt/cloud-init-templates'
+    vm_default_user: 'ubuntu'
+    vm_default_password: 'ubuntu'
+    vm_ssh_key_path: '{{ userhome }}/.ssh/id_ed25519.pub'
+    vm_timezone: 'UTC'
+    vm_templates:
+      - { hostname: k8s-0, instance_id: instance-0 }
+      - { hostname: k8s-1, instance_id: instance-1 }
+      - { hostname: k8s-2, instance_id: instance-2 }
+    vm_memory: 8192
+    vm_vcpus: 4
+    vm_disk_size: 80
 
   handlers:
     - name: Display Cockpit access info
@@ -25,7 +39,7 @@
       debug:
         msg: |-
           Ubuntu ISO downloaded!
-          Location: {{ iso_storage_path }}/{{ ubuntu_iso_filename }}
+          Location: {{ iso_storage_path }}/{{ ubuntu_cloud_image_filename }}
 
   tasks:
     - name: Update APT cache and upgrade system packages
@@ -38,6 +52,7 @@
       apt:
         state: present
         name:
+          - genisoimage
           - qemu-kvm
           - libvirt-daemon-system
           - libvirt-clients
@@ -47,6 +62,10 @@
           - python3-lxml
           - cockpit
           - cockpit-machines
+          - whois
+          - nmap
+          - virt-manager # UI tool alternative tto cockpit
+          - cloud-utils
 
     - name: Add user to libvirt group for virtualization access
       user:
@@ -115,10 +134,24 @@
         group: root
         mode: '0755'
 
-    - name: Download Ubuntu 24.04.2 server ISO
+    - name: Create fresh cloud-init templates directory
+      file:
+        path: '{{ cloudinit_template_dir }}'
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Read SSH public key
+      tags: cloud-init
+      slurp:
+        src: '{{ vm_ssh_key_path }}'
+      register: ssh_public_key
+
+    - name: Download Ubuntu 24.04 Cloud Image
       get_url:
-        url: '{{ ubuntu_iso_url }}'
-        dest: '{{ iso_storage_path }}/{{ ubuntu_iso_filename }}'
+        url: '{{ ubuntu_cloud_image_url }}'
+        dest: '{{ iso_storage_path }}/{{ ubuntu_cloud_image_filename }}'
         owner: root
         group: root
         mode: '0644'
@@ -127,3 +160,120 @@
       retries: 3
       delay: 10
       notify: Display Ubuntu download complete
+
+    - name: Generate password hash for cloud-init using mkpasswd
+      shell: |
+        echo '{{ vm_default_password }}' | mkpasswd --method=SHA-512 --rounds=4096 --stdin
+      register: password_hash
+      changed_when: false
+
+    - name: Create Cloud init user-data template
+      tags: cloud-init
+      copy:
+        dest: '{{ cloudinit_template_dir }}/user-data-{{ item.hostname }}.yaml'
+        owner: root
+        group: root
+        mode: '0644'
+        content: |
+          #cloud-config
+          fqdn: {{ item.hostname }}.k8s.internal
+          hostname: {{ item.hostname }}
+          manage_etc_hosts: true
+          users:
+            - name: ubuntu
+              ssh-authorized-keys:
+                - {{ lookup('file', vm_ssh_key_path) }}
+              sudo: ['ALL=(ALL) NOPASSWD:ALL']
+              groups: sudo
+              shell: /bin/bash
+              lock_passwd: false
+              chpasswd: { expire: False }
+              passwd: {{ password_hash.stdout }}
+          ssh_pwauth: true
+          package_update: true
+          packages:
+          - qemu-guest-agent
+          - curl
+          - git
+          runcmd:
+            - systemctl enable qemu-guest-agent
+            - systemctl start qemu-guest-agent
+      loop: '{{ vm_templates }}'
+
+    - name: Create cloud-init meta-data template
+      tags: cloud-init
+      copy:
+        dest: '{{ cloudinit_template_dir }}/meta-data-{{ item.hostname }}.yaml'
+        content: |
+          instance-id: {{ item.instance_id }}
+          local-hostname: {{ item.hostname }}
+        owner: root
+        group: root
+        mode: '0644'
+      loop: '{{ vm_templates }}'
+
+    - name: Create cloud-init ISO for each VM
+      tags: cloud-init
+      shell: |
+        cloud-localds {{ cloudinit_template_dir }}/cloud-init-{{ item.hostname }}.iso \
+        {{ cloudinit_template_dir }}/user-data-{{ item.hostname }}.yaml \
+        {{ cloudinit_template_dir }}/meta-data-{{ item.hostname }}.yaml
+      args:
+        creates: '{{ cloudinit_template_dir }}/cloud-init-{{ item.hostname }}.iso'
+      loop: '{{ vm_templates }}'
+
+    - name: Create VM disk images with Ubuntu cloud image backing
+      tags: vm-create
+      shell: |
+        qemu-img create -f qcow2 \
+        -o backing_file={{ iso_storage_path }}/{{ ubuntu_cloud_image_filename }},backing_fmt=qcow2 \
+        {{ iso_storage_path }}/{{ item.hostname }}.qcow2 {{ vm_disk_size }}G
+      loop: '{{ vm_templates }}'
+      args:
+        creates: '{{ iso_storage_path }}/{{ item.hostname }}.qcow2'
+
+    - name: Create VMs with virt-install
+      tags: vm-create
+      shell: |
+        virt-install \
+        --name {{ item.hostname }} \
+        --ram {{ vm_memory }} \
+        --vcpus {{ vm_vcpus }} \
+        --disk path={{ iso_storage_path }}/{{ item.hostname }}.qcow2,format=qcow2 \
+        --cdrom {{ cloudinit_template_dir }}/cloud-init-{{ item.hostname }}.iso \
+        --network network={{ bridge_name }} \
+        --os-type linux \
+        --os-variant ubuntu24.04 \
+        --graphics none \
+        --noautoconsole \
+        --import
+      loop: '{{ vm_templates }}'
+      args:
+        creates: /etc/libvirt/qemu/{{ item.hostname }}.xml
+
+    - name: Display connection info
+      debug:
+        msg: |
+          {{ vm_templates | length }} VMs created with cloud-init auto-provisioning!
+
+          VMs: {{ vm_templates | map(attribute='hostname') | join(', ') }}
+
+          Cloud-init will configure each VM on first boot with:
+          - Your SSH key for passwordless access
+          - Default user: {{ vm_default_user }}
+          - Automatic package updates
+          - Common development tools (qemu-guest-agent, curl, git)
+
+          Wait 2-3 minutes for cloud-init to complete, then:
+          - SSH: ssh {{ vm_default_user }}@<vm-ip>
+          - Console: virsh console <vm-name>
+          - Web: http://localhost:9090
+
+          Commands:
+          - List VMs: virsh list --all
+          - Get VM IPs: virsh domifaddr <vm-name> --source agent
+          - VM info: virsh dominfo <vm-name>
+
+          Expected FQDN format: <hostname>.k8s.internal
+          Bridge network: {{ bridge_name }}
+          SSH key: {{ vm_ssh_key_path }}
