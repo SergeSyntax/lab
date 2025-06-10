@@ -5,7 +5,7 @@ ohmyzsh_install_url: 'https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/t
 zsh_theme: 'powerlevel10k/powerlevel10k'
 zsh_shell_path: '{{ userhome }}/.zshrc'
 ohmyzsh_dir: '{{ userhome }}/.oh-my-zsh'
-zsh_plugins_list: 'git zsh-autosuggestions zsh-syntax-highlighting nvm colored-man-pages pip python ssh terraform aws virtualenv docker kubectl kubectx'
+zsh_plugins_list: 'git zsh-autosuggestions zsh-syntax-highlighting nvm colored-man-pages pip python ssh terraform aws virtualenv docker kubectl kubectx helm'
 
 meslo_base_url: https://github.com/romkatv/powerlevel10k-media/raw/master
 meslo_fonts:

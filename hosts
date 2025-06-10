@@ -1,0 +1,4 @@
+[k3s]
+k8s-0 ansible_host=10.100.102.190 ansible_user=ubuntu
+k8s-1 ansible_host=10.100.102.191 ansible_user=ubuntu
+k8s-2 ansible_host=10.100.102.192 ansible_user=ubuntu

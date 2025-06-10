@@ -20,9 +20,9 @@
     vm_ssh_key_path: '{{ userhome }}/.ssh/id_ed25519.pub'
     vm_timezone: 'UTC'
     vm_templates:
-      - { hostname: k8s-0, instance_id: instance-0 }
-      - { hostname: k8s-1, instance_id: instance-1 }
-      - { hostname: k8s-2, instance_id: instance-2 }
+      - { hostname: k8s-0, instance_id: 52:54:00:23:d7:b3 }
+      - { hostname: k8s-1, instance_id: 52:54:00:86:c6:f1 }
+      - { hostname: k8s-2, instance_id: 52:54:00:1e:d6:a9 }
     vm_memory: 8192
     vm_vcpus: 4
     vm_disk_size: 80
@@ -212,15 +212,46 @@
         mode: '0644'
       loop: '{{ vm_templates }}'
 
+    - name: Auto-detect network gateway
+      shell: ip route | grep default | head -n1 | awk '{print $3}'
+      register: detected_gateway
+      changed_when: false
+
+    - name: Set gateway variable from detection
+      set_fact:
+        vm_gateway: '{{ detected_gateway.stdout | trim }}'
+
+    - name: Create network-config file for each VM
+      tags: cloud-init
+      copy:
+        dest: '{{ cloudinit_template_dir }}/network-config-{{ item.hostname }}.yaml'
+        owner: root
+        group: root
+        mode: '0644'
+        content: |
+          version: 2
+          ethernets:
+            enp1s0:
+              dhcp4: false
+              addresses:
+                - "{{ hostvars[item.hostname]['ansible_host'] }}/24"
+              routes:
+                - to: default
+                  via: {{ vm_gateway }}
+              nameservers:
+                addresses: [8.8.8.8, 1.1.1.1]
+      loop: '{{ vm_templates }}'
+
     - name: Create cloud-init ISO for each VM
       tags: cloud-init
       shell: |
-        cloud-localds {{ cloudinit_template_dir }}/cloud-init-{{ item.hostname }}.iso \
+        cloud-localds --network-config={{ cloudinit_template_dir }}/network-config-{{ item.hostname }}.yaml \
+        {{ cloudinit_template_dir }}/cloud-init-{{ item.hostname }}.iso \
         {{ cloudinit_template_dir }}/user-data-{{ item.hostname }}.yaml \
         {{ cloudinit_template_dir }}/meta-data-{{ item.hostname }}.yaml
+      loop: '{{ vm_templates }}'
       args:
         creates: '{{ cloudinit_template_dir }}/cloud-init-{{ item.hostname }}.iso'
-      loop: '{{ vm_templates }}'
 
     - name: Create VM disk images with Ubuntu cloud image backing
       tags: vm-create
@@ -241,15 +272,15 @@
         --vcpus {{ vm_vcpus }} \
         --disk path={{ iso_storage_path }}/{{ item.hostname }}.qcow2,format=qcow2 \
         --cdrom {{ cloudinit_template_dir }}/cloud-init-{{ item.hostname }}.iso \
-        --network network={{ bridge_name }} \
+        --network network={{ bridge_name }},mac={{ item.instance_id }} \
         --os-type linux \
         --os-variant ubuntu24.04 \
         --graphics none \
         --noautoconsole \
         --import
       loop: '{{ vm_templates }}'
-      args:
-        creates: /etc/libvirt/qemu/{{ item.hostname }}.xml
+      # args:
+      #   creates: /etc/libvirt/qemu/{{ item.hostname }}.xml
 
     - name: Display connection info
       debug:
