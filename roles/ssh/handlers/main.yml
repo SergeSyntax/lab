@@ -1,6 +1,6 @@
 ---
 - name: Display SSH public key for GitHub
-  pause:
+  ansible.builtin.pause:
     prompt: |
 
       ========================================

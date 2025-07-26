@@ -1,0 +1,95 @@
+{
+  // === APPEARANCE ===
+  "workbench.iconTheme": "material-icon-theme",
+  "window.zoomLevel": 0,
+
+  // === EDITOR BEHAVIOR ===
+  "editor.wordWrap": "on",
+  "editor.tabSize": 2,
+  "editor.insertSpaces": true,
+  "editor.detectIndentation": false,
+  "editor.formatOnSave": true,
+  "editor.formatOnPaste": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+
+  // === VISUAL GUIDES ===
+  "editor.guides.bracketPairs": "active",
+  "editor.bracketPairColorization.enabled": true,
+  "editor.guides.indentation": true,
+
+  // === CODE ACTIONS ===
+  "editor.codeActionsOnSave": {
+    "source.fixAll": "explicit",
+    "source.organizeImports": "explicit"
+  },
+
+  // === PRETTIER CONFIGURATION ===
+  "prettier.singleQuote": true,
+  "prettier.printWidth": 120,
+  "prettier.trailingComma": "none",
+  "prettier.arrowParens": "avoid",
+  "prettier.semi": true,
+  "prettier.tabWidth": 2,
+
+  // === EMMET CONFIGURATION ===
+  "emmet.includeLanguages": {
+    "javascript": "javascriptreact",
+    "typescript": "typescriptreact",
+    "vue-html": "html"
+  },
+  "emmet.syntaxProfiles": {
+    "javascript": "jsx",
+    "typescript": "jsx"
+  },
+  "emmet.showSuggestionsAsSnippets": true,
+  "emmet.triggerExpansionOnTab": true,
+
+  // === AUTO RENAME TAG ===
+  "auto-rename-tag.activationOnLanguage": [
+    "html",
+    "xml",
+    "php",
+    "javascript",
+    "javascriptreact",
+    "typescript",
+    "typescriptreact",
+    "vue"
+  ],
+
+  // === ADDITIONAL IMPROVEMENTS ===
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "files.trimFinalNewlines": true,
+  "editor.renderWhitespace": "boundary",
+  "editor.minimap.enabled": true,
+  "editor.minimap.maxColumn": 120,
+  "workbench.editor.enablePreview": false,
+
+  "[helm]": {
+    "editor.formatOnSave": false
+  },
+  "[terraform]": {
+    "editor.defaultFormatter": "hashicorp.terraform"
+  },
+  "[shellscript]": {
+    "editor.defaultFormatter": "foxundermoon.shell-format"
+  },
+  "[ignore]": {
+    "editor.defaultFormatter": "foxundermoon.shell-format"
+  },
+  "[terraform-vars]": {
+    "editor.defaultFormatter": "hashicorp.terraform"
+  },
+  "[dockerfile]": {
+    "editor.defaultFormatter": "ms-azuretools.vscode-containers"
+  },
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.black-formatter",
+    "editor.tabSize": 4,
+    "editor.insertSpaces": true
+  },
+  "workbench.editor.empty.hint": "hidden",
+
+  // === ANSIBLE CONFIGURATION ===
+  "ansible.python.interpreterPath": "/usr/bin/python3"
+}

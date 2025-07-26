@@ -1,24 +1,18 @@
-- name: Check if nvm is already installed
-  stat:
-    path: '{{ userhome }}/.nvm'
-  register: nvm_check
-  become: false
-
 - name: Install nvm if not present
-  when: not nvm_check.stat.exists
   become: false
   block:
     - name: Download nvm install script
-      get_url:
+      ansible.builtin.get_url:
         url: '{{ nvm_install_script_url }}'
         dest: /tmp/nvm_install.sh
         mode: '0755'
 
     - name: Run nvm install script
-      shell: /tmp/nvm_install.sh
+      ansible.builtin.shell: /tmp/nvm_install.sh
       args:
         executable: /bin/bash
         creates: '{{ userhome }}/.nvm/nvm.sh'
       environment:
         HOME: '{{ userhome }}'
         USER: '{{ username }}'
+        NVM_DIR: '{{ userhome }}/.nvm'

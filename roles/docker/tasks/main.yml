@@ -1,39 +1,39 @@
 ---
 - name: Download and set permissions for Docker GPG key
   tags: 'docker'
-  get_url:
+  ansible.builtin.get_url:
     url: '{{ docker_download_url }}/gpg'
-    dest: '{{docker_gpg_key_path}}'
+    dest: '{{ docker_gpg_key_path }}'
     mode: '0644'
 
 - name: Get system architecture from dpkg
   tags: 'docker'
-  command: dpkg --print-architecture
+  ansible.builtin.command: dpkg --print-architecture
   register: dpkg_architecture
   changed_when: false
 
 - name: Add Docker APT repository
   tags: 'docker'
-  apt_repository:
-    repo: 'deb [arch={{ dpkg_architecture.stdout }} signed-by={{docker_gpg_key_path}}] {{ docker_download_url }} {{ ansible_distribution_release }} stable'
+  ansible.builtin.apt_repository:
+    repo: 'deb [arch={{ dpkg_architecture.stdout }} signed-by={{ docker_gpg_key_path }}] {{ docker_download_url }} {{ ansible_distribution_release }} stable'
     filename: docker
 
 - name: Update APT cache and upgrade system packages
   tags: 'docker'
-  apt:
+  ansible.builtin.apt:
     update_cache: true
     upgrade: dist
     cache_valid_time: 3600
 
 - name: Install Docker packages
   tags: 'docker'
-  apt:
+  ansible.builtin.apt:
     state: present
     name: '{{ docker_apt_packages }}'
 
 - name: Add user to Docker group
   tags: 'docker'
-  user:
+  ansible.builtin.user:
     name: '{{ username }}'
     groups: '{{ docker_group_name }}'
-    append: yes
+    append: true

@@ -10,8 +10,8 @@
     bridge_connection_name: bridge-br0
     bridge_xml_file: /tmp/br0.xml
     iso_storage_path: '/var/lib/libvirt/images'
-    ubuntu_cloud_image_url: 'https://cloud-images.ubuntu.com/oracular/current/oracular-server-cloudimg-amd64.img'
-    ubuntu_cloud_image_filename: 'ubuntu-oracular-server-cloudimg-amd64.img'
+    ubuntu_cloud_image_filename: 'ubuntu-24.04-server-cloudimg-amd64.img'
+    ubuntu_cloud_image_url: 'https://cloud-images.ubuntu.com/releases/noble/release/ubuntu-24.04-server-cloudimg-amd64.img'
 
     # Cloud-init defaults for automated VM provisioning
     cloudinit_template_dir: '/var/lib/libvirt/cloud-init-templates'
@@ -29,27 +29,27 @@
 
   handlers:
     - name: Display Cockpit access info
-      debug:
+      ansible.builtin.debug:
         msg: |
           KVM setup complete!
           Cockpit: http://localhost:9090
           Login: {{ username }}
           ISOs: {{ iso_storage_path }}/
     - name: Display Ubuntu download complete
-      debug:
+      ansible.builtin.debug:
         msg: |-
           Ubuntu ISO downloaded!
           Location: {{ iso_storage_path }}/{{ ubuntu_cloud_image_filename }}
 
   tasks:
     - name: Update APT cache and upgrade system packages
-      apt:
+      ansible.builtin.apt:
         update_cache: true
         upgrade: dist
         cache_valid_time: 3600
 
     - name: Install KVM and virtualization dependencies
-      apt:
+      ansible.builtin.apt:
         state: present
         name:
           - genisoimage
@@ -60,6 +60,7 @@
           - python3-pip
           - python3-libvirt
           - python3-lxml
+          - python3-passlib
           - cockpit
           - cockpit-machines
           - whois
@@ -68,13 +69,13 @@
           - cloud-utils
 
     - name: Add user to libvirt group for virtualization access
-      user:
+      ansible.builtin.user:
         name: '{{ username }}'
         groups: libvirt
         append: true
 
     - name: Create bridge connection
-      nmcli:
+      community.general.nmcli:
         conn_name: '{{ bridge_connection_name }}'
         ifname: '{{ bridge_name }}'
         type: bridge
@@ -82,7 +83,7 @@
         state: present
 
     - name: Add ethernet interface to bridge as slave
-      nmcli:
+      community.general.nmcli:
         conn_name: 'bridge-slave-{{ ethernet_interface }}'
         ifname: '{{ ethernet_interface }}'
         type: ethernet
@@ -91,13 +92,13 @@
         state: present
 
     - name: Create libvirt definition for the bridge
-      copy:
-        dest: '{{bridge_xml_file}}'
+      ansible.builtin.copy:
+        dest: '{{ bridge_xml_file }}'
         content: |
           <network>
-            <name>{{bridge_name}}</name>
+            <name>{{ bridge_name }}</name>
             <forward mode='bridge'/>
-            <bridge name='{{bridge_name}}'/>
+            <bridge name='{{ bridge_name }}'/>
           </network>
         owner: '{{ username }}'
         group: '{{ username }}'
@@ -120,14 +121,14 @@
         autostart: true
 
     - name: Enable and start Cockpit web console
-      systemd:
+      ansible.builtin.systemd:
         name: cockpit.socket
         enabled: true
         state: started
       notify: Display Cockpit access info
 
     - name: Create ISO storage directory
-      file:
+      ansible.builtin.file:
         path: '{{ iso_storage_path }}'
         state: directory
         owner: root
@@ -135,7 +136,7 @@
         mode: '0755'
 
     - name: Create fresh cloud-init templates directory
-      file:
+      ansible.builtin.file:
         path: '{{ cloudinit_template_dir }}'
         state: directory
         owner: root
@@ -144,12 +145,12 @@
 
     - name: Read SSH public key
       tags: cloud-init
-      slurp:
+      ansible.builtin.slurp:
         src: '{{ vm_ssh_key_path }}'
       register: ssh_public_key
 
     - name: Download Ubuntu 24.04 Cloud Image
-      get_url:
+      ansible.builtin.get_url:
         url: '{{ ubuntu_cloud_image_url }}'
         dest: '{{ iso_storage_path }}/{{ ubuntu_cloud_image_filename }}'
         owner: root
@@ -161,15 +162,13 @@
       delay: 10
       notify: Display Ubuntu download complete
 
-    - name: Generate password hash for cloud-init using mkpasswd
-      shell: |
-        echo '{{ vm_default_password }}' | mkpasswd --method=SHA-512 --rounds=4096 --stdin
-      register: password_hash
-      changed_when: false
+    - name: Generate password hash for cloud-init
+      ansible.builtin.set_fact:
+        password_hash: "{{ vm_default_password | password_hash('sha512') }}"
 
     - name: Create Cloud init user-data template
       tags: cloud-init
-      copy:
+      ansible.builtin.copy:
         dest: '{{ cloudinit_template_dir }}/user-data-{{ item.hostname }}.yaml'
         owner: root
         group: root
@@ -188,8 +187,16 @@
               shell: /bin/bash
               lock_passwd: false
               chpasswd: { expire: False }
-              passwd: {{ password_hash.stdout }}
+              passwd: {{ password_hash }}
           ssh_pwauth: true
+          write_files:
+            - path: /etc/hosts
+              content: |
+                127.0.0.1 localhost
+                {{ hostvars['k8s-0']['ansible_host'] }} k8s-0 k8s-0.k8s.internal
+                {{ hostvars['k8s-1']['ansible_host'] }} k8s-1 k8s-1.k8s.internal
+                {{ hostvars['k8s-2']['ansible_host'] }} k8s-2 k8s-2.k8s.internal
+              append: true
           package_update: true
           packages:
           - qemu-guest-agent
@@ -202,7 +209,7 @@
 
     - name: Create cloud-init meta-data template
       tags: cloud-init
-      copy:
+      ansible.builtin.copy:
         dest: '{{ cloudinit_template_dir }}/meta-data-{{ item.hostname }}.yaml'
         content: |
           instance-id: {{ item.instance_id }}
@@ -212,18 +219,9 @@
         mode: '0644'
       loop: '{{ vm_templates }}'
 
-    - name: Auto-detect network gateway
-      shell: ip route | grep default | head -n1 | awk '{print $3}'
-      register: detected_gateway
-      changed_when: false
-
-    - name: Set gateway variable from detection
-      set_fact:
-        vm_gateway: '{{ detected_gateway.stdout | trim }}'
-
     - name: Create network-config file for each VM
       tags: cloud-init
-      copy:
+      ansible.builtin.copy:
         dest: '{{ cloudinit_template_dir }}/network-config-{{ item.hostname }}.yaml'
         owner: root
         group: root
@@ -237,14 +235,14 @@
                 - "{{ hostvars[item.hostname]['ansible_host'] }}/24"
               routes:
                 - to: default
-                  via: {{ vm_gateway }}
+                  via: {{ ansible_default_ipv4.gateway }}
               nameservers:
-                addresses: [8.8.8.8, 1.1.1.1]
+                addresses: [{{ ansible_default_ipv4.gateway }}, 8.8.8.8, 1.1.1.1]
       loop: '{{ vm_templates }}'
 
     - name: Create cloud-init ISO for each VM
       tags: cloud-init
-      shell: |
+      ansible.builtin.shell: |
         cloud-localds --network-config={{ cloudinit_template_dir }}/network-config-{{ item.hostname }}.yaml \
         {{ cloudinit_template_dir }}/cloud-init-{{ item.hostname }}.iso \
         {{ cloudinit_template_dir }}/user-data-{{ item.hostname }}.yaml \
@@ -255,7 +253,7 @@
 
     - name: Create VM disk images with Ubuntu cloud image backing
       tags: vm-create
-      shell: |
+      ansible.builtin.shell: |
         qemu-img create -f qcow2 \
         -o backing_file={{ iso_storage_path }}/{{ ubuntu_cloud_image_filename }},backing_fmt=qcow2 \
         {{ iso_storage_path }}/{{ item.hostname }}.qcow2 {{ vm_disk_size }}G
@@ -265,7 +263,7 @@
 
     - name: Create VMs with virt-install
       tags: vm-create
-      shell: |
+      ansible.builtin.shell: |
         virt-install \
         --name {{ item.hostname }} \
         --ram {{ vm_memory }} \
@@ -279,11 +277,11 @@
         --noautoconsole \
         --import
       loop: '{{ vm_templates }}'
-      # args:
-      #   creates: /etc/libvirt/qemu/{{ item.hostname }}.xml
+      args:
+        creates: /etc/libvirt/qemu/{{ item.hostname }}.xml
 
     - name: Display connection info
-      debug:
+      ansible.builtin.debug:
         msg: |
           {{ vm_templates | length }} VMs created with cloud-init auto-provisioning!
 

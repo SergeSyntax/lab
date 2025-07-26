@@ -31,10 +31,13 @@ zsh_packages:
 zsh_custom_extensions:
   - name: zsh-syntax-highlighting
     repo: https://github.com/zsh-users/zsh-syntax-highlighting.git
+    version: HEAD
     dest: '{{ ohmyzsh_dir }}/custom/plugins/zsh-syntax-highlighting'
   - name: zsh-autosuggestions
     repo: https://github.com/zsh-users/zsh-autosuggestions.git
+    version: HEAD
     dest: '{{ ohmyzsh_dir }}/custom/plugins/zsh-autosuggestions'
   - name: powerlevel10k
     repo: https://github.com/romkatv/powerlevel10k.git
+    version: HEAD
     dest: '{{ ohmyzsh_dir }}/custom/themes/powerlevel10k'

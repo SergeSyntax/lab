@@ -1,14 +1,14 @@
 ---
 - name: Update apt cache and upgrade system
   tags: git
-  apt:
+  ansible.builtin.apt:
     update_cache: true
     upgrade: dist
     cache_valid_time: 3600
 
 - name: Install essential packages
   tags: git
-  apt:
+  ansible.builtin.apt:
     state: present
     name:
       - git
