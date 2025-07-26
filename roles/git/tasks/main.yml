@@ -19,6 +19,8 @@
     name: user.name
     value: '{{ git_user_name }}'
     scope: global
+  environment:
+    HOME: '{{ userhome }}'
 
 - name: Set git user.email
   tags: git
@@ -26,3 +28,5 @@
     name: user.email
     value: '{{ git_email }}'
     scope: global
+  environment:
+    HOME: '{{ userhome }}'

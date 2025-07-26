@@ -90,3 +90,17 @@
             USER: '{{ username }}'
           args:
             creates: /usr/local/bin/helm
+
+    - name: Install 1Password if not present
+      block:
+        - name: Download 1Password package
+          ansible.builtin.get_url:
+            url: https://downloads.1password.com/linux/debian/amd64/stable/1password-latest.deb
+            dest: /tmp/1password.deb
+            mode: '0644'
+            timeout: 30
+          retries: 3
+
+        - name: Install 1Password
+          ansible.builtin.apt:
+            deb: /tmp/1password.deb
