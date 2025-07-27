@@ -28,13 +28,6 @@
     vm_disk_size: 80
 
   handlers:
-    - name: Display Cockpit access info
-      ansible.builtin.debug:
-        msg: |
-          KVM setup complete!
-          Cockpit: http://localhost:9090
-          Login: {{ username }}
-          ISOs: {{ iso_storage_path }}/
     - name: Display Ubuntu download complete
       ansible.builtin.debug:
         msg: |-
@@ -60,12 +53,9 @@
           - python3-pip
           - python3-libvirt
           - python3-lxml
-          - python3-passlib
-          - cockpit
-          - cockpit-machines
           - whois
           - nmap
-          - virt-manager # UI tool alternative tto cockpit
+          - virt-manager
           - cloud-utils
 
     - name: Add user to libvirt group for virtualization access
@@ -91,6 +81,18 @@
         master: '{{ bridge_name }}'
         state: present
 
+    - name: Activate bridge connection
+      community.general.nmcli:
+        conn_name: '{{ bridge_connection_name }}'
+        state: up
+      changed_when: false
+
+    - name: Activate bridge slave connection
+      community.general.nmcli:
+        conn_name: 'bridge-slave-{{ ethernet_interface }}'
+        state: up
+      changed_when: false
+
     - name: Create libvirt definition for the bridge
       ansible.builtin.copy:
         dest: '{{ bridge_xml_file }}'
@@ -101,8 +103,8 @@
             <bridge name='{{ bridge_name }}'/>
           </network>
         owner: '{{ username }}'
-        group: '{{ username }}'
-        mode: '0644'
+        group: libvirt
+        mode: '0664'
 
     - name: Define libvirt bridge network
       community.libvirt.virt_net:
@@ -120,28 +122,21 @@
         name: '{{ bridge_name }}'
         autostart: true
 
-    - name: Enable and start Cockpit web console
-      ansible.builtin.systemd:
-        name: cockpit.socket
-        enabled: true
-        state: started
-      notify: Display Cockpit access info
-
     - name: Create ISO storage directory
       ansible.builtin.file:
         path: '{{ iso_storage_path }}'
         state: directory
-        owner: root
-        group: root
-        mode: '0755'
+        owner: '{{ username }}'
+        group: libvirt
+        mode: '0775'
 
     - name: Create fresh cloud-init templates directory
       ansible.builtin.file:
         path: '{{ cloudinit_template_dir }}'
         state: directory
-        owner: root
-        group: root
-        mode: '0755'
+        owner: '{{ username }}'
+        group: libvirt
+        mode: '0775'
 
     - name: Read SSH public key
       tags: cloud-init
@@ -153,9 +148,9 @@
       ansible.builtin.get_url:
         url: '{{ ubuntu_cloud_image_url }}'
         dest: '{{ iso_storage_path }}/{{ ubuntu_cloud_image_filename }}'
-        owner: root
-        group: root
-        mode: '0644'
+        owner: '{{ username }}'
+        group: libvirt
+        mode: '0664'
         timeout: 1800
         force: false
       retries: 3
@@ -170,9 +165,9 @@
       tags: cloud-init
       ansible.builtin.copy:
         dest: '{{ cloudinit_template_dir }}/user-data-{{ item.hostname }}.yaml'
-        owner: root
-        group: root
-        mode: '0644'
+        owner: '{{ username }}'
+        group: libvirt
+        mode: '0664'
         content: |
           #cloud-config
           fqdn: {{ item.hostname }}.k8s.internal
@@ -189,14 +184,6 @@
               chpasswd: { expire: False }
               passwd: {{ password_hash }}
           ssh_pwauth: true
-          write_files:
-            - path: /etc/hosts
-              content: |
-                127.0.0.1 localhost
-                {{ hostvars['k8s-0']['ansible_host'] }} k8s-0 k8s-0.k8s.internal
-                {{ hostvars['k8s-1']['ansible_host'] }} k8s-1 k8s-1.k8s.internal
-                {{ hostvars['k8s-2']['ansible_host'] }} k8s-2 k8s-2.k8s.internal
-              append: true
           package_update: true
           packages:
           - qemu-guest-agent
@@ -214,17 +201,17 @@
         content: |
           instance-id: {{ item.instance_id }}
           local-hostname: {{ item.hostname }}
-        owner: root
-        group: root
-        mode: '0644'
+        owner: '{{ username }}'
+        group: libvirt
+        mode: '0664'
       loop: '{{ vm_templates }}'
 
     - name: Create network-config file for each VM
       tags: cloud-init
       ansible.builtin.copy:
         dest: '{{ cloudinit_template_dir }}/network-config-{{ item.hostname }}.yaml'
-        owner: root
-        group: root
+        owner: '{{ username }}'
+        group: '{{ username }}'
         mode: '0644'
         content: |
           version: 2
@@ -237,7 +224,7 @@
                 - to: default
                   via: {{ ansible_default_ipv4.gateway }}
               nameservers:
-                addresses: [{{ ansible_default_ipv4.gateway }}, 8.8.8.8, 1.1.1.1]
+                addresses: [8.8.8.8, 1.1.1.1]
       loop: '{{ vm_templates }}'
 
     - name: Create cloud-init ISO for each VM
@@ -247,9 +234,18 @@
         {{ cloudinit_template_dir }}/cloud-init-{{ item.hostname }}.iso \
         {{ cloudinit_template_dir }}/user-data-{{ item.hostname }}.yaml \
         {{ cloudinit_template_dir }}/meta-data-{{ item.hostname }}.yaml
+      become_user: '{{ username }}'
       loop: '{{ vm_templates }}'
       args:
         creates: '{{ cloudinit_template_dir }}/cloud-init-{{ item.hostname }}.iso'
+
+    - name: Set ownership of cloud-init ISO files
+      ansible.builtin.file:
+        path: '{{ cloudinit_template_dir }}/cloud-init-{{ item.hostname }}.iso'
+        owner: '{{ username }}'
+        group: libvirt
+        mode: '0664'
+      loop: '{{ vm_templates }}'
 
     - name: Create VM disk images with Ubuntu cloud image backing
       tags: vm-create
@@ -257,9 +253,18 @@
         qemu-img create -f qcow2 \
         -o backing_file={{ iso_storage_path }}/{{ ubuntu_cloud_image_filename }},backing_fmt=qcow2 \
         {{ iso_storage_path }}/{{ item.hostname }}.qcow2 {{ vm_disk_size }}G
+      become_user: '{{ username }}'
       loop: '{{ vm_templates }}'
       args:
         creates: '{{ iso_storage_path }}/{{ item.hostname }}.qcow2'
+
+    - name: Set ownership of VM disk images
+      ansible.builtin.file:
+        path: '{{ iso_storage_path }}/{{ item.hostname }}.qcow2'
+        owner: '{{ username }}'
+        group: libvirt
+        mode: '0664'
+      loop: '{{ vm_templates }}'
 
     - name: Create VMs with virt-install
       tags: vm-create
@@ -280,6 +285,13 @@
       args:
         creates: /etc/libvirt/qemu/{{ item.hostname }}.xml
 
+    - name: Enable autostart for VMs
+      tags: vm-create
+      community.libvirt.virt:
+        name: '{{ item.hostname }}'
+        autostart: true
+      loop: '{{ vm_templates }}'
+
     - name: Display connection info
       ansible.builtin.debug:
         msg: |
@@ -296,13 +308,21 @@
           Wait 2-3 minutes for cloud-init to complete, then:
           - SSH: ssh {{ vm_default_user }}@<vm-ip>
           - Console: virsh console <vm-name>
-          - Web: http://localhost:9090
+          - GUI: Launch virt-manager
 
           Commands:
           - List VMs: virsh list --all
           - Get VM IPs: virsh domifaddr <vm-name> --source agent
           - VM info: virsh dominfo <vm-name>
+          - Launch GUI: virt-manager
+          - Check autostart: virsh dominfo <vm-name> | grep Autostart
 
           Expected FQDN format: <hostname>.k8s.internal
           Bridge network: {{ bridge_name }}
           SSH key: {{ vm_ssh_key_path }}
+          VM Autostart: ENABLED
+
+          Storage locations:
+          - VM Images: {{ iso_storage_path }}
+          - Cloud-init templates: {{ cloudinit_template_dir }}
+          - All files owned by: {{ username }}:libvirt
