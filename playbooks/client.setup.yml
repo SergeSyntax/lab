@@ -29,6 +29,24 @@
           User: {{ username }}
           Home: {{ userhome }}
           Fonts installed in: {{ fonts_dir }}
+    - name: Display AWS CLI configuration info
+      ansible.builtin.debug:
+        msg: |
+          AWS CLI has been installed successfully!
+          To configure AWS CLI, run:
+            aws configure
+
+          You will be prompted for:
+            - AWS Access Key ID
+            - AWS Secret Access Key
+            - Default region name (e.g., us-east-1)
+            - Default output format (json, text, or table)
+
+          Alternatively, you can use:
+            aws configure set aws_access_key_id YOUR_ACCESS_KEY
+            aws configure set aws_secret_access_key YOUR_SECRET_KEY
+            aws configure set default.region YOUR_REGION
+            aws configure set default.output json
 
   tasks:
     - name: Install essential packages
@@ -104,3 +122,25 @@
         - name: Install 1Password
           ansible.builtin.apt:
             deb: /tmp/1password.deb
+
+    - name: Install AWS CLI if not present
+      block:
+        - name: Download AWS CLI package
+          ansible.builtin.get_url:
+            url: https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip
+            dest: /tmp/awscliv2.zip
+            mode: '0644'
+            timeout: 30
+          retries: 3
+
+        - name: Unzip AWS CLI package
+          ansible.builtin.unarchive:
+            src: /tmp/awscliv2.zip
+            dest: /tmp
+            remote_src: true
+
+        - name: Install AWS CLI
+          ansible.builtin.command: /tmp/aws/install
+          args:
+            creates: /usr/local/bin/aws
+          notify: Display AWS CLI configuration info
