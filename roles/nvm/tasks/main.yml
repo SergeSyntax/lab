@@ -1,5 +1,4 @@
 - name: Install nvm if not present
-  become: false
   block:
     - name: Download nvm install script
       ansible.builtin.get_url:
@@ -16,3 +15,11 @@
         HOME: '{{ userhome }}'
         USER: '{{ username }}'
         NVM_DIR: '{{ userhome }}/.nvm'
+
+    - name: Fix NVM directory ownership
+      ansible.builtin.file:
+        path: '{{ userhome }}/.nvm'
+        owner: '{{ username }}'
+        group: '{{ username }}'
+        recurse: true
+        state: directory

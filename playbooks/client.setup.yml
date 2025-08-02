@@ -138,6 +138,7 @@
             src: /tmp/awscliv2.zip
             dest: /tmp
             remote_src: true
+            creates: /tmp/aws
 
         - name: Install AWS CLI
           ansible.builtin.command: /tmp/aws/install

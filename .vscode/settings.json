@@ -91,5 +91,7 @@
   "workbench.editor.empty.hint": "hidden",
 
   // === ANSIBLE CONFIGURATION ===
+  "ansible.lightspeed.enabled": false,
+  "redhat.telemetry.enabled": false,
   "ansible.python.interpreterPath": "/usr/bin/python3"
 }
