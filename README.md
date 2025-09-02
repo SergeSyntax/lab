@@ -1,3 +1,49 @@
+# Ansible Lab
+
+This repository contains Ansible playbooks and configurations for lab environments.
+
+## Prerequisites
+
+### Required Software
+
+- Ansible (>= 2.9)
+- Python (>= 3.6)
+
+## Collections Setup
+
+This project uses Ansible collections. Install required collections using one of the methods below:
+
+**Using requirements.yml (Recommended):**
+
+```bash
+ansible-galaxy install -r requirements.yml
+```
+
+**Direct Installation:**
+
+```bash
+ansible-galaxy collection install kubernetes.core
+ansible-galaxy collection install community.general
+```
+
+## Configuration
+
+The project includes an `ansible.cfg` file with recommended settings. Key configurations.
+
+## Project Structure
+
+```
+LAB/
+├── .vscode/           # VS Code settings
+├── docs/              # Documentation
+├── playbooks/         # Ansible playbooks
+├── roles/             # Custom Ansible roles
+├── ansible.cfg        # Ansible configuration
+├── hosts              # Inventory file
+├── requirements.yml   # Collection dependencies
+└── README.md         # This file
+```
+
 ## 🧰 Ansible-Based Setup Notes
 
 > 📁 All Ansible playbooks are located in the root `playbooks/` folder.
@@ -108,4 +154,12 @@ Replace `<filename>` with the playbook name you want to run.
 
 ---
 
-Let me know if you want to include an example playbook structure or role breakdown.
+### 📦 Collections Setup
+
+1. Install dependencies (if needed):
+
+```bash
+ansible-galaxy install -r requirements.yml
+```
+
+> **Note**: Most collections should be installed by default with your system's Ansible package. Only add collections to `requirements.yml` if they're missing or you need specific versions for your playbooks.
