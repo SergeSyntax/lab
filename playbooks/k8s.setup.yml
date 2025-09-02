@@ -19,3 +19,209 @@
     api_endpoint: "{{ hostvars['k8s-0']['ansible_host'] }}"
   roles:
     - k3s-server
+
+- name: K3s Agents setup
+  hosts: agents
+  gather_facts: true
+  become: true
+  vars:
+    vm_default_user: 'ubuntu'
+    vm_default_password: 'ubuntu'
+    api_endpoint: "{{ hostvars['k8s-0']['ansible_host'] }}"
+  roles:
+    - k3s-agent
+# # TODO: placeholder will be refactored the whole file
+# # PLAY 1: Setup all nodes
+# - name: Setup k8s on vm servers
+#   hosts: k3s
+#   become: true
+#   tasks:
+#     - name: Remove conflicting pkgs
+#       ansible.builtin.apt:
+#         state: absent
+#         name:
+#           - systemd-timesyncd
+
+#     - name: Install essential pkgs
+#       ansible.builtin.apt:
+#         state: present
+#         name:
+#           - nfs-common
+#           - chrony
+
+#     - name: Start and enable chrony
+#       ansible.builtin.systemd:
+#         name: chrony
+#         state: started
+#         enabled: true
+
+#     - name: Disable UFW and AppArmor
+#       ansible.builtin.systemd:
+#         name: '{{ item }}'
+#         state: stopped
+#         enabled: false
+#       loop:
+#         - ufw
+#         - apparmor
+
+#     - name: Disable swap immediately
+#       ansible.builtin.command: swapoff -a
+
+#     - name: Disable swap permanently
+#       ansible.builtin.replace:
+#         path: /etc/fstab
+#         regexp: '^([^#].*?\sswap\s+sw\s+.*)$'
+#         replace: '# \1'
+
+#     - name: Load br_netfilter and overlay modules
+#       community.general.modprobe:
+#         name: '{{ item }}'
+#         state: present
+#       loop:
+#         - br_netfilter
+#         - overlay
+
+#     - name: Configure kernel parameters for Kubernetes
+#       ansible.posix.sysctl:
+#         name: '{{ item.name }}'
+#         value: '{{ item.value }}'
+#         state: present
+#         reload: true
+#       loop:
+#         - { name: 'net.bridge.bridge-nf-call-iptables', value: '1' }
+#         - { name: 'net.bridge.bridge-nf-call-ip6tables', value: '1' }
+#         - { name: 'net.ipv4.ip_forward', value: '1' }
+
+#     - name: Ensure kernel modules load on boot
+#       ansible.builtin.copy:
+#         dest: /etc/modules-load.d/k8s.conf
+#         content: |
+#           br_netfilter
+#           overlay
+
+# # PLAY 2: Setup K3s server
+# - name: Install K3s Server
+#   hosts: k8s-0
+#   become: true
+#   tasks:
+#     - name: Install K3s server
+#       ansible.builtin.shell: curl -sfL https://get.k3s.io | sudo bash -
+
+#     - name: Wait for K3s server to start
+#       ansible.builtin.wait_for:
+#         port: 6443
+#         host: '{{ ansible_default_ipv4.address }}'
+#         delay: 10
+#         timeout: 120
+
+#     - name: Setup kubectl access for ubuntu user
+#       block:
+#         - name: Create .kube directory
+#           ansible.builtin.file:
+#             path: /home/ubuntu/.kube
+#             state: directory
+#             owner: ubuntu
+#             group: ubuntu
+#             mode: '0755'
+
+#         - name: Copy kubeconfig for ubuntu user
+#           ansible.builtin.copy:
+#             src: /etc/rancher/k3s/k3s.yaml
+#             dest: /home/ubuntu/.kube/config
+#             owner: ubuntu
+#             group: ubuntu
+#             mode: '0600'
+#             remote_src: true
+
+#         - name: Create kubectl symlink
+#           ansible.builtin.file:
+#             src: /usr/local/bin/k3s
+#             dest: /usr/local/bin/kubectl
+#             state: link
+
+#     - name: Wait for kubectl to be ready
+#       ansible.builtin.shell: /usr/local/bin/k3s kubectl get nodes
+#       register: kubectl_result
+#       retries: 10
+#       delay: 10
+#       until: kubectl_result.rc == 0
+
+#     - name: Get K3s node token
+#       ansible.builtin.slurp:
+#         src: /var/lib/rancher/k3s/server/node-token
+#       register: k3s_token
+
+#     - name: Save token to local file
+#       ansible.builtin.copy:
+#         content: '{{ k3s_token.content | b64decode | trim }}'
+#         dest: /tmp/k3s-token
+#       delegate_to: localhost
+#       become: false
+
+# # PLAY 3: Setup K3s agents
+# - name: Install K3s Agents
+#   hosts: k3s:!k8s-0
+#   become: true
+#   vars:
+#     k3s_server_ip: "{{ hostvars['k8s-0']['ansible_default_ipv4']['address'] }}"
+#   tasks:
+#     - name: Read K3s token from local file
+#       ansible.builtin.slurp:
+#         src: /tmp/k3s-token
+#       register: k3s_token_file
+#       delegate_to: localhost
+#       become: false
+
+#     - name: Set token variable
+#       ansible.builtin.set_fact:
+#         k3s_token: '{{ k3s_token_file.content | b64decode | trim }}'
+
+#     - name: Wait for K3s server to be available
+#       ansible.builtin.wait_for:
+#         host: '{{ k3s_server_ip }}'
+#         port: 6443
+#         timeout: 120
+
+#     - name: Install K3s agent
+#       ansible.builtin.shell: |
+#         curl -sfL https://get.k3s.io | K3S_URL=https://{{ k3s_server_ip }}:6443 K3S_TOKEN={{ k3s_token }} sudo bash -s - agent
+
+#     - name: Wait for k3s-agent to start
+#       ansible.builtin.systemd:
+#         name: k3s-agent
+#         state: started
+#         enabled: true
+
+# # PLAY 4: Verify cluster
+# - name: Verify K3s Cluster
+#   hosts: k8s-0
+#   become: true
+#   tasks:
+#     - name: Wait for all nodes to join cluster
+#       ansible.builtin.shell: /usr/local/bin/k3s kubectl get nodes --no-headers | wc -l
+#       register: node_count
+#       retries: 15
+#       delay: 10
+#       until: node_count.stdout | int == groups['k3s'] | length
+
+#     - name: Get cluster status
+#       ansible.builtin.shell: /usr/local/bin/k3s kubectl get nodes -o wide
+#       register: cluster_status
+
+#     - name: Display cluster information
+#       ansible.builtin.debug:
+#         msg: |
+#           ✅ K3s Cluster Ready!
+
+#           {{ cluster_status.stdout }}
+
+#           🎯 Access your cluster:
+#           - SSH: ssh ubuntu@{{ ansible_default_ipv4.address }}
+#           - Run: kubectl get pods -A
+
+#     - name: Clean up local token file
+#       ansible.builtin.file:
+#         path: /tmp/k3s-token
+#         state: absent
+#       delegate_to: localhost
+#       become: false
