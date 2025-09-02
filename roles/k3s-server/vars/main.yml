@@ -1,0 +1,13 @@
+k3s_version: v1.30.2+k3s1
+#   This is now an inner yaml file. Maintain the indentation.
+#   YAML here will be placed as the content of /etc/rancher/k3s/config.yaml
+#   See https://docs.k3s.io/installation/configuration#configuration-file
+server_config_yaml: |
+  write-kubeconfig-mode: "0644"
+
+# tls-san:
+#   - "foo.local"
+# node-label:
+#   - "foo=bar"
+#   - "something=amazing"
+# cluster-init: true

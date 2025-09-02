@@ -1,0 +1,4 @@
+---
+api_port: 6443
+cluster_context: k3s-ansible
+tmp_kubeconfig: '/tmp/config.new'
